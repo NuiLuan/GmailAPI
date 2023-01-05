@@ -79,7 +79,7 @@ namespace Test
                     isReceivedEmail = true;
                     break;
                 }
-                Thread.Sleep(1000);
+                Thread.Sleep(10000);
                 actualTime = Utility.GetCurrentTimeFollowFormat("dd/MM/yyyy HH:mm");
             }while(actualTime != expectedTime);
             return isReceivedEmail;
