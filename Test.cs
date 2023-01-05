@@ -3,6 +3,9 @@ using NavigosAT.Utilities;
 using Newtonsoft.Json.Linq;
 using NUnit.Framework;
 using System.Threading;
+using System;
+
+
 
 using NavigosAT.WrapperFactory;
 
@@ -22,11 +25,12 @@ namespace Test
 
         [Test, Category("CheckEmail")]   
         public void CheckMailForFiveMinutes(){
-            Logger.Log(string.Format("access_token: {0}", access_token));
             AssertWrapper.True(IsReceicedMailForFiveMinutes(), "DID NOT RECEIVED NEW MAIL!");
         }
+        //contructor
         public CheckMail(){
-            this.access_token = "Bearer " + GetGmailAccessToken();            
+            this.access_token = "Bearer " + GetGmailAccessToken();         
+            Logger.Log(string.Format("access_token: {0}", access_token));
         }
         private string GetGmailAccessToken()
         {
@@ -41,9 +45,9 @@ namespace Test
             Utility.TryGetValueFromJSON(JObject.Parse(response)["access_token"], out token);
             return token;
         }  
-        private string GetFirstIdFromMsgList()
+        private string GetFirstIdFromMsgListBySubject(string subjectGmail="")
         {
-            Options options = new Options(getMsgList_uri, APIMethod.GET);
+            Options options = new Options(string.Format(getMsgList_uri + "?q=subject:{0}", subjectGmail), APIMethod.GET);
             options.AddHeader("Authorization", access_token);
             var response = APIHelper.Request(options).Content;
             string result = "";
@@ -52,10 +56,34 @@ namespace Test
         }
 
         public bool IsReceicedMailForFiveMinutes(){
-            return IsReceicedMailForInputtedMinutes(5);
+            // return IsReceicedMailBySubjectForInputtedMinutes(5);
+            return IsReceicedMailForInputtedMinutesBySubject(5, "Hello");
         }
-        public void GetGmailContentByID(string idGmail){
-            Logger.Log("Check new mail");
+
+        //Method below still can be used without subject
+        public bool IsReceicedMailForInputtedMinutesBySubject(int timeoutInMinutes, string subjectGmail="")
+        {
+            bool isReceivedEmail = false;
+            int timeoutInSeconds = timeoutInMinutes*60;
+            string idToCheck = GetFirstIdFromMsgListBySubject(subjectGmail);
+            string idNewest;
+            long expectedTime = GetCurrentUnixTime() + (long)timeoutInSeconds;
+            long actualTime;
+            do{
+                Logger.Log("Checking...!");
+                idNewest = GetFirstIdFromMsgListBySubject(subjectGmail);
+                if(idNewest!=idToCheck){
+                    Logger.Log("Received a new Gmail!");
+                    PrintGmailContentByID(idNewest);
+                    isReceivedEmail = true;
+                    break;
+                }
+                actualTime = GetCurrentUnixTime();
+                Thread.Sleep(10000);
+            }while(expectedTime >= actualTime);
+            return isReceivedEmail;
+        }
+        public void PrintGmailContentByID(string idGmail){
             Options options = new Options(string.Format(getMsgList_uri + "/{0}", idGmail), APIMethod.GET);
             options.AddHeader("Authorization", access_token);
             var response = APIHelper.Request(options).Content;
@@ -64,25 +92,12 @@ namespace Test
             Logger.Log(string.Format("The mail id-{0} with content: {1}", idGmail, result));
         }
 
-        public bool IsReceicedMailForInputtedMinutes(int timeoutInMinutes){
-            string idToCheck = GetFirstIdFromMsgList();
-            string idNewest;
-
-            bool isReceivedEmail = false;
-            string expectedTime = Utility.GetCurrentTimeFollowFormat("dd/MM/yyyy HH:mm", 0, 0, timeoutInMinutes);
-            string actualTime;
-            do{
-                idNewest = GetFirstIdFromMsgList();
-                if(idNewest!=idToCheck){
-                    Logger.Log("Received a new Gmail!");
-                    GetGmailContentByID(idNewest);
-                    isReceivedEmail = true;
-                    break;
-                }
-                Thread.Sleep(10000);
-                actualTime = Utility.GetCurrentTimeFollowFormat("dd/MM/yyyy HH:mm");
-            }while(actualTime != expectedTime);
-            return isReceivedEmail;
+        // update to Util (if needed)
+        public long GetCurrentUnixTime()
+        {
+            DateTime foo = DateTime.Now;
+            long unixTime = ((DateTimeOffset)foo).ToUnixTimeSeconds();
+            return unixTime;
         }
     }
 }
